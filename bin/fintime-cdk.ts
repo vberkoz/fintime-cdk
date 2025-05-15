@@ -1,13 +1,14 @@
 #!/usr/bin/env node
 import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';
-import { FrontendStack } from '../lib/FrontendStack';
-import { BackendStack } from '../lib/BackendStack';
+import { AppFrontendStack } from '../lib/AppFrontendStack';
+import { SiteFrontendStack } from '../lib/SiteFrontendStack';
+import { AppBackendStack } from '../lib/AppBackendStack';
 
 const app = new cdk.App();
 
 // Pass the certificate from the frontend stack to the backend stack
-const backendStack = new BackendStack(app, 'FintimeBackendStack', {
+const appBackendStack = new AppBackendStack(app, 'FintimeAppBackendStack', {
   env: {
     account: process.env.CDK_DEFAULT_ACCOUNT,
     region: process.env.CDK_DEFAULT_REGION,
@@ -15,10 +16,20 @@ const backendStack = new BackendStack(app, 'FintimeBackendStack', {
 });
 
 // Create the frontend stack first
-const frontendStack = new FrontendStack(app, 'FintimeFrontendStack', {
+new AppFrontendStack(app, 'FintimeAppFrontendStack', {
   env: {
     account: process.env.CDK_DEFAULT_ACCOUNT,
     region: process.env.CDK_DEFAULT_REGION,
   },
-  api: backendStack.api,
+  api: appBackendStack.api,
 });
+
+// Create the frontend stack first
+new SiteFrontendStack(app, 'FintimeSiteFrontendStack', {
+  env: {
+    account: process.env.CDK_DEFAULT_ACCOUNT,
+    region: process.env.CDK_DEFAULT_REGION,
+  },
+});
+
+app.synth();
