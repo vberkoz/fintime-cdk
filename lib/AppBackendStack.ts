@@ -8,7 +8,7 @@ import { DynamoTable } from './constructs/DynamoTable';
 import { ApiLambda } from './constructs/ApiLambda';
 import { HttpApi } from './constructs/HttpApi';
 
-export class BackendStack extends Stack {
+export class AppBackendStack extends Stack {
     readonly api;
 
     constructor(scope: Construct, id: string, props: StackProps) {

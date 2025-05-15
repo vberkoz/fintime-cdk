@@ -10,7 +10,7 @@ import { Construct } from 'constructs';
 import { HostedZone } from './constructs/HostedZone';
 import { SiteCertificate } from './constructs/SiteCertificate';
 import { StaticSiteBucket } from './constructs/StaticSiteBucket';
-import { SiteDistribution } from './constructs/SiteDistribution';
+import { AppDistribution } from './constructs/AppDistribution';
 import { SiteDnsRecord } from './constructs/SiteDnsRecord';
 
 interface CloudFrontDistributionStackProps extends StackProps {
@@ -21,12 +21,12 @@ interface CloudFrontDistributionStackProps extends StackProps {
     api: apigateway.HttpApi;
 }
 
-export class FrontendStack extends Stack {
+export class AppFrontendStack extends Stack {
     constructor(scope: Construct, id: string, props: CloudFrontDistributionStackProps) {
         super(scope, id, props);
 
         const domainName = 'vberkoz.com';
-        const subdomain = 'fintime';
+        const subdomain = 'app.fintime';
         const fullDomain = `${subdomain}.${domainName}`;
 
         // Create hosted zone
@@ -44,8 +44,8 @@ export class FrontendStack extends Stack {
         const siteBucketConstruct = new StaticSiteBucket(this, 'FintimeBucket');
 
         // Create CloudFront distribution
-        const distributionConstruct = new SiteDistribution(this, 'FintimeDistribution', {
-            siteBucket: siteBucketConstruct.bucket,
+        const distributionConstruct = new AppDistribution(this, 'FintimeDistribution', {
+            appBucket: siteBucketConstruct.bucket,
             certificate: certificateConstruct.certificate,
             domainName: fullDomain,
             api: props.api,
