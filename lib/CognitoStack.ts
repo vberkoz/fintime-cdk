@@ -1,15 +1,12 @@
-import { CfnOutput, Stack, StackProps } from 'aws-cdk-lib';
+import { CfnOutput, RemovalPolicy, Stack, StackProps } from 'aws-cdk-lib';
 import {
   CfnManagedLoginBranding,
   ManagedLoginVersion,
   UserPool,
   UserPoolClient,
 } from 'aws-cdk-lib/aws-cognito';
-import { Code, Function, Runtime } from 'aws-cdk-lib/aws-lambda';
 import { StringParameter } from 'aws-cdk-lib/aws-ssm';
 import { Construct } from 'constructs';
-import { aws_route53 as route53, aws_certificatemanager as acm } from 'aws-cdk-lib';
-import { Certificate, CertificateValidation } from 'aws-cdk-lib/aws-certificatemanager';
 
 
 interface CognitoStackProps extends StackProps {
@@ -25,60 +22,39 @@ export class CognitoStack extends Stack {
 
     const domainName = 'vberkoz.com';
     const subDomain = 'app.fintime';
-    const loginSubDomain = 'login';
-
-    // const hostedZone = route53.HostedZone.fromLookup(this, 'HostedZone', {
-    //   domainName
-    // });
-
-    // const certificate = new Certificate(this, 'Certificate', {
-    //   validation: CertificateValidation.fromDns(hostedZone),
-    //   domainName: hostedZone.zoneName,
-    //   subjectAlternativeNames: [`*.${domainName}`],
-    // });
-
-    const preSignUpLambda01 = new Function(this, 'preSignUpLambda01', {
-      runtime: Runtime.PYTHON_3_13,
-      handler: 'index.lambda_handler',
-      code: Code.fromInline('def lambda_handler(event, context): event["response"]["autoConfirmUser"] = True; return event'),
-    });
 
     const userPool = new UserPool(this, 'UserPool', {
       userPoolName: 'FintimeUserPool',
-      lambdaTriggers: { preSignUp: preSignUpLambda01 },
       selfSignUpEnabled: true,
-      passwordPolicy: {
-        minLength: 6,
-        requireDigits: false,
-        requireLowercase: false,
-        requireSymbols: false,
-        requireUppercase: false,
-      },
+      signInAliases: { email: true },
+      autoVerify: { email: true },
+      removalPolicy: RemovalPolicy.DESTROY,
     });
 
-    new UserPoolClient(this, 'FintimeUserPoolClient', {
+    const userPoolClient = new UserPoolClient(this, 'FintimeUserPoolClient', {
       userPool: userPool,
       authFlows: { adminUserPassword: true },
-      oAuth: { callbackUrls: [`https://${subDomain}.${domainName}/`, 'http://localhost:5173/'] },
+      oAuth: { callbackUrls: [`https://${subDomain}.${domainName}/`] },
     });
 
-    // Use a Cognito-provided domain instead of a custom domain
-    // const userPoolDomain01 = userPool01.addDomain('login01', {
-    //   cognitoDomain: {
-    //     domainPrefix: `login-fintime-${domainName}`,
-    //     certificate,
-    //   },
-    //   managedLoginVersion: ManagedLoginVersion.NEWER_MANAGED_LOGIN,
-    // });
+    const userPoolDomain = userPool.addDomain('login', {
+      cognitoDomain: {
+        domainPrefix: 'login-fintime',
+      },
+      managedLoginVersion: ManagedLoginVersion.NEWER_MANAGED_LOGIN,
+    });
 
-    // new CfnManagedLoginBranding(this, 'cfnManagedLoginBranding01', {
-    //   clientId: userPoolClient01.userPoolClientId,
-    //   userPoolId: userPool01.userPoolId,
-    //   useCognitoProvidedValues: true,
-    // });
+    new CfnManagedLoginBranding(this, 'cfnManagedLoginBranding01', {
+      userPoolId: userPool.userPoolId,
+      clientId: userPoolClient.userPoolClientId,
+      useCognitoProvidedValues: true,
+    });
 
-    // No need for ARecord with Cognito-provided domain
-    // We'll output the domain URL instead
+    // new ARecord(this, 'ARecord', {
+    //   recordName: `${loginSubDomain}.${subDomain}`,
+    //   zone: hostedZone,
+    //   target: RecordTarget.fromAlias(new UserPoolDomainTarget(userPoolDomain)),
+    // });
 
     // new StringParameter(this, 'userPoolProviderUrl01', {
     //   parameterName: '/core/CognitoStack/userPool01/userPoolProviderUrl',
@@ -90,13 +66,7 @@ export class CognitoStack extends Stack {
     //   stringValue: userPoolClient01.userPoolClientId,
     // });
 
-    // new StringParameter(this, 'userPoolDomainUrl01', {
-    //   parameterName: '/core/CognitoStack/userPoolDomain01/url',
-    //   stringValue: userPoolDomain01.baseUrl(),
-    // });
-
     // new CfnOutput(this, 'authority', { value: userPool01.userPoolProviderUrl });
     // new CfnOutput(this, 'client_id', { value: userPoolClient01.userPoolClientId });
-    // new CfnOutput(this, 'domain_url', { value: userPoolDomain01.baseUrl() });
   }
 }
