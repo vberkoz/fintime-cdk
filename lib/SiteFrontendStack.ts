@@ -1,16 +1,13 @@
-import * as path from 'node:path';
-import {
-    Stack,
-    StackProps,
-    aws_s3_deployment as s3Deployment,
-} from 'aws-cdk-lib';
-
+import { CertificateValidation, Certificate } from 'aws-cdk-lib/aws-certificatemanager';
+import { ViewerProtocolPolicy, Distribution } from 'aws-cdk-lib/aws-cloudfront';
+import { ARecord, HostedZone, RecordTarget } from 'aws-cdk-lib/aws-route53';
+import { RemovalPolicy, StackProps, Duration, Stack } from 'aws-cdk-lib';
+import { BucketDeployment, Source } from 'aws-cdk-lib/aws-s3-deployment';
+import { S3BucketOrigin } from 'aws-cdk-lib/aws-cloudfront-origins';
+import { CloudFrontTarget } from 'aws-cdk-lib/aws-route53-targets';
+import { Bucket } from 'aws-cdk-lib/aws-s3';
 import { Construct } from 'constructs';
-import { HostedZone } from './constructs/HostedZone';
-import { SiteCertificate } from './constructs/SiteCertificate';
-import { StaticSiteBucket } from './constructs/StaticSiteBucket';
-import { SiteDistribution } from './constructs/SiteDistribution';
-import { SiteDnsRecord } from './constructs/SiteDnsRecord';
+import * as path from 'node:path';
 
 interface CloudFrontDistributionStackProps extends StackProps {
     env: {
@@ -27,43 +24,61 @@ export class SiteFrontendStack extends Stack {
         const subdomain = 'fintime';
         const fullDomain = `${subdomain}.${domainName}`;
 
-        // Create hosted zone
-        const hostedZoneConstruct = new HostedZone(this, 'FintimeHostedZone', {
+        const hostedZone = HostedZone.fromLookup(this, 'HostedZone', {
             domainName,
         });
 
-        // Create certificate
-        const certificateConstruct = new SiteCertificate(this, 'FintimeCert', {
+        const certificate = new Certificate(this, 'Certificate', {
             domainName: fullDomain,
-            hostedZone: hostedZoneConstruct.hostedZone,
+            subjectAlternativeNames: [`*.${hostedZone.zoneName}`],
+            validation: CertificateValidation.fromDns(hostedZone),
         });
 
-        // Create S3 bucket
-        const siteBucketConstruct = new StaticSiteBucket(this, 'FintimeBucket');
-
-        // Create CloudFront distribution
-        const distributionConstruct = new SiteDistribution(this, 'FintimeDistribution', {
-            siteBucket: siteBucketConstruct.bucket,
-            certificate: certificateConstruct.certificate,
-            domainName: fullDomain,
-            region: this.region,
+        const bucket = new Bucket(this, 'Bucket', {
+            websiteIndexDocument: 'index.html',
+            websiteErrorDocument: 'index.html',
+            publicReadAccess: false,
+            removalPolicy: RemovalPolicy.DESTROY,
+            autoDeleteObjects: true,
         });
 
-        // Deploy site content
-        new s3Deployment.BucketDeployment(this, 'BucketDeployment', {
-            sources: [
-                s3Deployment.Source.asset(path.join(process.cwd(), '../fintime-astro/dist')),
+        const distribution = new Distribution(this, 'Distribution', {
+            defaultRootObject: 'index.html',
+            defaultBehavior: {
+                origin: S3BucketOrigin.withOriginAccessControl(bucket),
+                viewerProtocolPolicy: ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+            },
+            domainNames: [fullDomain],
+            certificate: certificate,
+            errorResponses: [
+                {
+                    httpStatus: 404,
+                    responseHttpStatus: 200,
+                    responsePagePath: '/index.html',
+                    ttl: Duration.minutes(5)
+                },
+                {
+                    httpStatus: 403,
+                    responseHttpStatus: 200,
+                    responsePagePath: '/index.html',
+                    ttl: Duration.minutes(5)
+                },
             ],
-            destinationBucket: siteBucketConstruct.bucket,
-            distributionPaths: ['/*'],
-            distribution: distributionConstruct.distribution,
         });
 
-        // Create DNS record
-        new SiteDnsRecord(this, 'FintimeAliasRecord', {
-            zone: hostedZoneConstruct.hostedZone,
+        new BucketDeployment(this, 'BucketDeployment', {
+            sources: [
+                Source.asset(path.join(process.cwd(), '../fintime-astro/dist')),
+            ],
+            destinationBucket: bucket,
+            distributionPaths: ['/*'],
+            distribution,
+        });
+
+        new ARecord(this, 'AliasRecord', {
+            zone: hostedZone,
             recordName: subdomain,
-            distribution: distributionConstruct.distribution,
+            target: RecordTarget.fromAlias(new CloudFrontTarget(distribution)),
         });
     }
 }

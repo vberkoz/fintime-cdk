@@ -1,12 +1,16 @@
 import {
+    Duration,
+    RemovalPolicy,
     Stack,
     StackProps,
 } from 'aws-cdk-lib';
 
 import { Construct } from 'constructs';
-import { DynamoTable } from './constructs/DynamoTable';
-import { ApiLambda } from './constructs/ApiLambda';
-import { HttpApi } from './constructs/HttpApi';
+import { AttributeType, BillingMode, Table } from 'aws-cdk-lib/aws-dynamodb';
+import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
+import { Code, Runtime } from 'aws-cdk-lib/aws-lambda';
+import { CorsHttpMethod, HttpApi, HttpMethod } from 'aws-cdk-lib/aws-apigatewayv2';
+import { HttpLambdaIntegration } from 'aws-cdk-lib/aws-apigatewayv2-integrations';
 
 export class AppBackendStack extends Stack {
     readonly api;
@@ -14,26 +18,46 @@ export class AppBackendStack extends Stack {
     constructor(scope: Construct, id: string, props: StackProps) {
         super(scope, id, props);
 
-        // Create DynamoDB table
-        const tableConstruct = new DynamoTable(this, 'FintimeTable', {
-            tableName: 'fintime',
+        const tableName = 'fintime';
+
+        const table = new Table(this, 'Table', {
+            tableName,
+            partitionKey: { name: 'PK', type: AttributeType.STRING },
+            sortKey: { name: 'SK', type: AttributeType.STRING },
+            billingMode: BillingMode.PAY_PER_REQUEST,
+            removalPolicy: RemovalPolicy.DESTROY, // Use RETAIN for production
+            maxReadRequestUnits: 1,
+            maxWriteRequestUnits: 1,
         });
 
-        // Create Lambda function
-        const lambdaConstruct = new ApiLambda(this, 'FintimeFunction', {
-            tableName: tableConstruct.table.tableName,
-            codePath: '../fintime-api',
+        const lambda: NodejsFunction = new NodejsFunction(this, 'Function', {
+            runtime: Runtime.NODEJS_22_X,
+            handler: 'lambda.handler',
+            code: Code.fromAsset('../fintime-api'),
+            timeout: Duration.seconds(30),
+            environment: {
+                TABLE_NAME: tableName,
+                NODE_ENV: 'stage'
+            },
+        });
+        
+        const api = new HttpApi(this, 'HttpApi', {
+            disableExecuteApiEndpoint: false,
+            corsPreflight: {
+                allowHeaders: ['*'],
+                allowMethods: [CorsHttpMethod.ANY],
+                allowOrigins: ['*'],
+            },
         });
 
-        // Create API Gateway
-        const apiConstruct = new HttpApi(this, 'FintimeHttpApi', {
-            lambdaFunction: lambdaConstruct.lambda,
+        api.addRoutes({
+            path: '/api/{proxy+}',
+            methods: [HttpMethod.ANY],
+            integration: new HttpLambdaIntegration('integration', lambda),
         });
 
-        // Grant Lambda function read/write permissions to the DynamoDB table
-        tableConstruct.table.grantReadWriteData(lambdaConstruct.lambda);
+        table.grantReadWriteData(lambda);
 
-        // Export the API
-        this.api = apiConstruct.api;
+        this.api = api;
     }
 }
