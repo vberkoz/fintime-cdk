@@ -8,7 +8,7 @@ import { CognitoStack } from '../lib/CognitoStack';
 
 const app = new cdk.App();
 
-new CognitoStack(app, 'CognitoStack', {
+const cognitoStack = new CognitoStack(app, 'CognitoStack', {
   env: {
     account: process.env.CDK_DEFAULT_ACCOUNT,
     region: process.env.CDK_DEFAULT_REGION,
@@ -34,8 +34,12 @@ const appBackendStack = new AppBackendStack(app, 'AppBackendStack', {
   env: {
     account: process.env.CDK_DEFAULT_ACCOUNT,
     region: process.env.CDK_DEFAULT_REGION,
-  }
+  },
+  cognitoStack
 });
+
+// Add dependency to ensure CognitoStack is created before AppBackendStack
+appBackendStack.addDependency(cognitoStack);
 
 new AppFrontendStack(app, 'AppFrontendStack', {
   env: {
