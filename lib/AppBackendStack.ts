@@ -9,13 +9,23 @@ import { Construct } from 'constructs';
 import { AttributeType, BillingMode, Table } from 'aws-cdk-lib/aws-dynamodb';
 import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
 import { Code, Runtime } from 'aws-cdk-lib/aws-lambda';
-import { CorsHttpMethod, HttpApi, HttpMethod } from 'aws-cdk-lib/aws-apigatewayv2';
+import {
+    CorsHttpMethod,
+    HttpApi,
+    HttpMethod,
+} from 'aws-cdk-lib/aws-apigatewayv2';
 import { HttpLambdaIntegration } from 'aws-cdk-lib/aws-apigatewayv2-integrations';
+import { HttpUserPoolAuthorizer } from 'aws-cdk-lib/aws-apigatewayv2-authorizers';
+import { CognitoStack } from './CognitoStack';
+
+interface AppBackendStackProps extends StackProps {
+    cognitoStack: CognitoStack;
+}
 
 export class AppBackendStack extends Stack {
     readonly api;
 
-    constructor(scope: Construct, id: string, props: StackProps) {
+    constructor(scope: Construct, id: string, props: AppBackendStackProps) {
         super(scope, id, props);
 
         const tableName = 'fintime';
@@ -40,7 +50,11 @@ export class AppBackendStack extends Stack {
                 NODE_ENV: 'stage'
             },
         });
-        
+
+        const userPoolAuthorizer = new HttpUserPoolAuthorizer('userPoolAuthorizer', props.cognitoStack.userPool, {
+            userPoolClients: [props.cognitoStack.userPoolClient],
+        });
+
         const api = new HttpApi(this, 'HttpApi', {
             disableExecuteApiEndpoint: false,
             corsPreflight: {
@@ -54,6 +68,7 @@ export class AppBackendStack extends Stack {
             path: '/api/{proxy+}',
             methods: [HttpMethod.ANY],
             integration: new HttpLambdaIntegration('integration', lambda),
+            authorizer: userPoolAuthorizer,
         });
 
         table.grantReadWriteData(lambda);
