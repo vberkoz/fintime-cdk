@@ -1,11 +1,10 @@
-import { CfnOutput, RemovalPolicy, Stack, StackProps } from 'aws-cdk-lib';
+import { RemovalPolicy, Stack, StackProps } from 'aws-cdk-lib';
 import {
   CfnManagedLoginBranding,
   ManagedLoginVersion,
   UserPool,
   UserPoolClient,
 } from 'aws-cdk-lib/aws-cognito';
-import { StringParameter } from 'aws-cdk-lib/aws-ssm';
 import { Construct } from 'constructs';
 
 
@@ -17,6 +16,9 @@ interface CognitoStackProps extends StackProps {
 }
 
 export class CognitoStack extends Stack {
+  public readonly userPool: UserPool;
+  public readonly userPoolClient: UserPoolClient;
+
   constructor(scope: Construct, id: string, props: CognitoStackProps) {
     super(scope, id, props);
 
@@ -49,24 +51,8 @@ export class CognitoStack extends Stack {
       clientId: userPoolClient.userPoolClientId,
       useCognitoProvidedValues: true,
     });
-
-    // new ARecord(this, 'ARecord', {
-    //   recordName: `${loginSubDomain}.${subDomain}`,
-    //   zone: hostedZone,
-    //   target: RecordTarget.fromAlias(new UserPoolDomainTarget(userPoolDomain)),
-    // });
-
-    // new StringParameter(this, 'userPoolProviderUrl01', {
-    //   parameterName: '/core/CognitoStack/userPool01/userPoolProviderUrl',
-    //   stringValue: userPool01.userPoolProviderUrl,
-    // });
-
-    // new StringParameter(this, 'userPoolClientId01', {
-    //   parameterName: '/core/CognitoStack/userPoolClient01/userPoolClientId',
-    //   stringValue: userPoolClient01.userPoolClientId,
-    // });
-
-    // new CfnOutput(this, 'authority', { value: userPool01.userPoolProviderUrl });
-    // new CfnOutput(this, 'client_id', { value: userPoolClient01.userPoolClientId });
+    
+    this.userPool = userPool;
+    this.userPoolClient = userPoolClient;
   }
 }
